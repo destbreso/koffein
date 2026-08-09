@@ -11,7 +11,7 @@
 // apples to apples. koffein's default policy is W-TinyLFU; the `transitory` package
 // is the other npm W-TinyLFU, included for a same-family sanity check.
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -28,6 +28,13 @@ import {
 import { Cache, WTinyLFU } from "../dist/index.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+// Read off the harness that actually ran, rather than a version typed into
+// prose. This report went two minors out of date once because it said
+// "cache-arena" and not which one, so nothing in the file could contradict it.
+const ARENA_VERSION = JSON.parse(
+  await readFile(join(root, "node_modules/cache-arena/package.json"), "utf8"),
+).version;
 const SEED = 1;
 
 // koffein as a benchmark subject. Default policy = W-TinyLFU. koffein's get()
@@ -63,7 +70,7 @@ const report = buildReport({
     node: process.version,
     generatedAt: new Date().toISOString(),
     notes:
-      "Measured with cache-arena (github.com/destbreso/cache-arena). koffein's default policy " +
+      `Measured with cache-arena@${ARENA_VERSION} (github.com/destbreso/cache-arena). koffein's default policy ` +
       "is W-TinyLFU; `transitory` is the other npm W-TinyLFU, included for a same-family " +
       "comparison. Workloads are fixed-seed and the reference policies and koffein are seeded, " +
       "so their rows reproduce exactly; transitory has its own unseeded admission coin and may " +

@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project aims to adhere
 to [Semantic Versioning](https://semver.org/).
 
+## [0.6.3]
+
+The harness moved and this report moves with it. cache-arena 0.4.0 measures peak occupancy at the capacity being benchmarked instead of applying one small-capacity probe across the panel.
+
+**koffein's own rows did not change, on any workload, at any size.** Its measured occupancy is 1.00 entries per entry of nominal capacity, so no sizing correction has ever applied to it, and this is the second harness upgrade in a row where that has been the answer.
+
+What changed is the comparison beside it. `transitory` reads 27.2% at the headline column where it read 25.4%, because it holds 1.36 entries per entry at a capacity of 17 and 1.01 at 4,262, and it was being charged the 1.36 at every size. The gap between the two W-TinyLFU implementations is 0.9 of a point now rather than 2.7, which is the same conclusion said more accurately: treat them as level, and read the cross-check rather than the ordering.
+
+Also: `bench/arena.mjs` reads the harness version out of the installed package and stamps it into the report. It was written into the prose by hand, which is how the report came to be two minors behind in the first place.
+
 ## [0.6.2]
 
 The benchmark was being run by a harness two minors out of date: the devDependency asked for `cache-arena@^0.1.0` while the published harness was at 0.3.1, and `^0.1.0` does not accept it. Upgraded and the whole report regenerated.

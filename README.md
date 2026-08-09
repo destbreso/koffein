@@ -177,16 +177,13 @@ SIEVE at 28.6% and LFU at 28.3%. What the table says is that a good modern polic
 is worth a great deal over LRU and that this is a good modern policy, which is
 the honest and still useful claim.
 
-`transitory`, the other npm W-TinyLFU, reads 25.4% in the same column, and that
-gap is worth explaining rather than banking. The harness measures peak occupancy
-instead of trusting it, and `transitory` holds 1.36 entries per entry of nominal
-capacity where koffein holds 1.00, so it is sized down to compare at equal
-occupancy. That correction is deliberately conservative: the factor is probed at
-small nominal capacities and applied at every size, and `transitory`'s overshoot
-is largely a small-capacity effect, so at the wider columns it is being charged
-more than it costs. Take the two as level. What matters here is the cross-check,
-that two independent W-TinyLFU implementations land in the same region, which is
-the evidence that this one is built right.
+`transitory`, the other npm W-TinyLFU, reads 27.2% in the same column, and that
+0.9 of a point is worth explaining rather than banking. The harness measures peak
+occupancy instead of trusting it, and `transitory` holds 1.36 entries per entry
+of nominal capacity at that size where koffein holds 1.00, so it is sized down to
+compare at equal occupancy. Treat the two as level. What matters here is not the
+ordering, it is the cross-check: two independent W-TinyLFU implementations
+landing in the same region is the evidence that this one is built right.
 
 On a pure **loop** larger than the cache, LRU's textbook worst case, the
 W-TinyLFU family is the only one that recovers a meaningful share: koffein reads
