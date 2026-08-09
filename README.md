@@ -192,9 +192,12 @@ non-family result is Random at 2.0%.
 
 ![koffein vs the field on YCSB-skew Zipf](https://raw.githubusercontent.com/destbreso/koffein/main/charts/mrc-zipf-0-99.svg)
 
-Efficiency numbers above are exact (a deterministic simulation); throughput is
-per-machine and per-implementation, reported in [BENCHMARKS.md](./BENCHMARKS.md)
-as the median of 12 timed trials with its interquartile range.
+Efficiency numbers above are exact (a deterministic simulation). Throughput is
+not, so it is measured differently: [BENCHMARKS.md](./BENCHMARKS.md) reports the
+median of 12 interleaved trials in each of five separate processes, prints the
+spread within a run and the spread between runs as two figures, and ranks two
+caches only when all five processes agreed on which was faster. Pairs they split
+are listed as unordered.
 
 ## Where this earns its place
 
@@ -288,11 +291,12 @@ to the footprint, plain LRU
 **Throughput is your bottleneck, not hit ratio.** Admission is not free: koffein
 does more work per operation than a bare LRU map, a sketch lookup and sometimes
 an eviction decision, so it is not the throughput leader. In the same report it
-averages 10.5 million operations per second across the eight workloads, against
-19.8 for [`tiny-lru`](https://www.npmjs.com/package/tiny-lru), 18.5 for
-[`quick-lru`](https://www.npmjs.com/package/quick-lru) and 13.6 for
+averages 9.9 million operations per second across the eight workloads, against
+18.9 for [`tiny-lru`](https://www.npmjs.com/package/tiny-lru), 17.1 for
+[`quick-lru`](https://www.npmjs.com/package/quick-lru) and 13.2 for
 [`lru-cache`](https://www.npmjs.com/package/lru-cache) on the same machine and in
-the same rounds. If your backing store is fast and your cache is doing millions
+the same rounds, and every one of those three gaps is one all five replicates
+agreed on. If your backing store is fast and your cache is doing millions
 of operations a second, one of those may serve you better even at a lower hit
 ratio. That is a real trade and the numbers for both sides are in
 [BENCHMARKS.md](./BENCHMARKS.md).

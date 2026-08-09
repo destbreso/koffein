@@ -13,19 +13,18 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   standardWorkloads,
-  referencePolicies,
   competitors,
-  adapter,
+  measureAllResidency,
   missRatioCurves,
-  throughputResults,
+  throughputAcrossProcesses,
   buildReport,
-  mulberry32,
 } from "cache-arena";
-import { Cache, WTinyLFU } from "../dist/index.js";
+
+import { createSubjects } from "./subject-entry.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -35,31 +34,38 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ARENA_VERSION = JSON.parse(
   await readFile(join(root, "node_modules/cache-arena/package.json"), "utf8"),
 ).version;
-const SEED = 1;
-
-// koffein as a benchmark subject. Default policy = W-TinyLFU. koffein's get()
-// returns undefined on a miss and has() is a side-effect-free membership test,
-// so it plugs straight into the harness with no miss-sentinel translation.
-// The admission gate's tie-break coin is SEEDED (a fresh deterministic stream per
-// cache) so koffein's rows are exactly reproducible, not just its inputs.
-const koffein = adapter({
-  name: "koffein",
-  policy: "W-TinyLFU",
-  source: "koffein",
-  make: (capacity) => new Cache(capacity, { policy: new WTinyLFU({ random: mulberry32(SEED) }) }),
-});
+// koffein as a benchmark subject, and the rest of the panel, live in
+// `subject-entry.mjs`. They are defined there rather than here because a
+// replicate has to be able to rebuild them in its own process, and a panel
+// defined in two places is two panels the day one of them is edited.
 
 const workloads = standardWorkloads();
-const { subjects: competitorSubjects, missing } = await competitors();
-// Seed the Random reference policy too, so the only residual run-to-run variation
-// is transitory's own internal (unseeded) admission coin.
-const subjects = [koffein, ...referencePolicies(mulberry32(SEED)), ...competitorSubjects];
+const { missing } = await competitors();
+// The panel comes from `subject-entry.mjs` so that the replicates below build
+// the same one this process does. Seeded throughout, so the only residual
+// run-to-run variation is transitory's own internal (unseeded) admission coin.
+const subjects = await createSubjects();
 
 console.log(`cache-arena: ${subjects.length} caches over ${workloads.length} workloads`);
 if (missing.length) console.log(`(not installed, skipped: ${missing.join(", ")})`);
 
 const mrc = missRatioCurves({ subjects, workloads, includeOpt: true });
-const throughput = throughputResults({ subjects, workloads, trials: 12, warmup: 3 });
+
+// The efficiency axis above is deterministic and measured once. The clock is
+// not, so it is measured again from scratch in a fresh process five times, and
+// two caches are ranked only when all five agreed on the direction. A pair they
+// split is printed as unordered, which is a result and not a gap.
+const throughput = await throughputAcrossProcesses({
+  subjects: {
+    module: pathToFileURL(join(root, "bench/subject-entry.mjs")).href,
+    exportName: "createSubjects",
+  },
+  workloads,
+  residency: measureAllResidency(subjects),
+  trials: 12,
+  warmup: 3,
+});
+for (const line of throughput.lost) console.log(`lost: ${line}`);
 
 const report = buildReport({
   mrc,

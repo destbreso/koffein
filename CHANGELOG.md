@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project aims to adhere
 to [Semantic Versioning](https://semver.org/).
 
+## [0.6.4]
+
+Engine untouched. The benchmark report was regenerated on cache-arena 0.5.0, which times the throughput axis in five separate processes instead of one and ranks two caches only when all five agreed on the direction.
+
+**Four throughput figures in the README moved**, all of them the kind of drift a hand-transcribed number accumulates: koffein reads 9.9 million operations per second across the eight workloads where the page said 10.5, `tiny-lru` 18.9 against 19.8, `quick-lru` 17.1 against 18.5, `lru-cache` 13.2 against 13.6. The ordering is unchanged and koffein is still not the throughput leader, which was the point that paragraph exists to make. All three of those gaps are ones every replicate agreed on; the only pair in the whole table koffein cannot be separated from is `hashlru` on `zipf-0.7`, at a median ratio of 1.01x.
+
+The report also states its own multiplicity now: 840 pairs at five replicates, and if none of them actually differed the unanimity rule would still separate about 52 of them. That is a ceiling on how many of the separations are noise, not a forecast, and the report names the replicate count that would put it under one.
+
+The panel moved to `bench/subject-entry.mjs`, because a `Subject` is closures and a closure does not cross a process boundary: a replicate has to rebuild the panel rather than receive it, and a panel defined in two places is two panels the day one of them is edited.
+
 ## [0.6.3]
 
 The harness moved and this report moves with it. cache-arena 0.4.0 measures peak occupancy at the capacity being benchmarked instead of applying one small-capacity probe across the panel.
