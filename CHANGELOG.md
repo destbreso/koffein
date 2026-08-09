@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project aims to adhere
 to [Semantic Versioning](https://semver.org/).
 
+## [0.6.2]
+
+The benchmark was being run by a harness two minors out of date: the devDependency asked for `cache-arena@^0.1.0` while the published harness was at 0.3.1, and `^0.1.0` does not accept it. Upgraded and the whole report regenerated.
+
+**koffein's own numbers did not move.** Every efficiency row is identical across all eight workloads, which is the answer to the obvious worry about regenerating a benchmark you publish. Peak occupancy for koffein measures 1.00 entries per entry of nominal capacity, so the sizing correction 0.3.0 introduced does not touch it.
+
+**`transitory` moved, and the README now says why.** It reads 25.4% where it read 29.0%, because the harness now measures peak occupancy rather than trusting a declaration, and `transitory` holds 1.36 entries per entry of nominal capacity. That is a fair correction in principle and a conservative one in practice: the factor is probed at small nominal capacities and applied at every size, and the overshoot is largely a small-capacity effect, so at the wider columns it is charged more than it costs. The README takes the two as level rather than claiming a win, and says the cross-check is the point: two independent W-TinyLFU implementations landing in the same region is the evidence this one is built right.
+
+Also: BENCHMARKS.md records the harness version it was generated with. It said cache-arena and not which one, which is how a report comes to be two minors behind without anybody noticing.
+
 ## [0.6.1]
 
 **"Keys can be any type" was true for storage and quietly false for everything this cache is for.** The default hash sends anything that is not a string or an integer through `String(key)`, so every plain object collapses onto the single counter `"[object Object]"`, the frequency sketch can no longer tell a hot key from a one-hit scan, and scan resistance stops working. Measured: a hot object key touched fifty times is evicted by a 200-key sweep, while the identical test with string keys survives. The warning now sits at the point of the claim rather than a paragraph later, and all three behaviours are pinned by tests, including the failure, so the README's warning has something behind it.

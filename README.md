@@ -166,12 +166,21 @@ set.
 Read that table with its own limits attached. The +84% is against plain LRU, the
 weakest live policy in the panel, at the most extreme size; at 10% of footprint
 the same comparison is +8%. And against the strong policies koffein does not
-lead: at the exact column headlined above it sits at the bottom of the top group,
-behind S3-FIFO at 30.0%, `transitory` at 29.0%, SIEVE at 28.6% and LFU at 28.3%.
-What the table says is that a good modern policy is worth a great deal over LRU
-and that this is a good modern policy, which is the honest and still useful
-claim. Tracking `transitory`, the other npm W-TinyLFU, to within a rounding error
-is the cross-check that the implementation is sound.
+lead: at the exact column headlined above it sits inside the top group but not at
+the front of it, behind S3-FIFO at 30.0%, SIEVE at 28.6% and LFU at 28.3%. What
+the table says is that a good modern policy is worth a great deal over LRU and
+that this is a good modern policy, which is the honest and still useful claim.
+
+`transitory`, the other npm W-TinyLFU, reads 25.4% in the same column, and that
+gap is worth explaining rather than banking. The harness measures peak occupancy
+instead of trusting it, and `transitory` holds 1.36 entries per entry of nominal
+capacity where koffein holds 1.00, so it is sized down to compare at equal memory.
+That correction is deliberately conservative: the factor is probed at small
+nominal capacities and applied at every size, and `transitory`'s overshoot is
+largely a small-capacity effect, so at the wider columns it is being charged more
+than it costs. Take the two as level. What matters here is the cross-check, that
+two independent W-TinyLFU implementations land in the same region, which is the
+evidence that this one is built right.
 
 On a pure **loop** larger than the cache, LRU's textbook worst case, the
 W-TinyLFU family is the only one that recovers a meaningful share: koffein reads
