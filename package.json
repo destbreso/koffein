@@ -1,6 +1,6 @@
 {
   "name": "koffein",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "A modern, zero-dependency cache for JavaScript/TypeScript with a pluggable eviction policy: W-TinyLFU admission (Count-Min Sketch + SLRU) that beats plain LRU on skewed workloads. TypeScript-first.",
   "author": {
     "name": "David Estevez",
@@ -36,7 +36,8 @@
     "bench": "npm run build && node bench/sketch.mjs",
     "bench:cache": "npm run build && node bench/bakeoff.mjs",
     "bench:arena": "npm run build && node bench/arena.mjs",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run typecheck && npm test && npm run build && npm run verify:dist",
+    "verify:dist": "node scripts/verify-dist.mjs"
   },
   "keywords": [
     "cache",

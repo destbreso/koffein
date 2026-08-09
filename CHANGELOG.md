@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project aims to adhere
 to [Semantic Versioning](https://semver.org/).
 
+## [0.6.1]
+
+**"Keys can be any type" was true for storage and quietly false for everything this cache is for.** The default hash sends anything that is not a string or an integer through `String(key)`, so every plain object collapses onto the single counter `"[object Object]"`, the frequency sketch can no longer tell a hot key from a one-hit scan, and scan resistance stops working. Measured: a hot object key touched fifty times is evicted by a 200-key sweep, while the identical test with string keys survives. The warning now sits at the point of the claim rather than a paragraph later, and all three behaviours are pinned by tests, including the failure, so the README's warning has something behind it.
+
+**Two public exports had no tests at all.** The `hash` option of `WTinyLFU`, which is the escape hatch for the trap above, and `IntrusiveList`, advertised as "handy when writing your own", were both documented and untouched by the suite.
+
+**The headline said less than it knew.** The +84% is against plain LRU, the weakest live policy, at the most extreme cache size; at 10% of footprint it is +8%. And at the exact column quoted, koffein sits at the bottom of the top group behind S3-FIFO, `transitory`, SIEVE and LFU. The table now says so. The claim that survives, that a good modern policy beats LRU by a lot and this is one, is the useful one anyway. Also corrected: koffein was described as the only family recovering any hits on a pure loop, where the table shows it at 0.0% below a quarter of footprint and Random at 2.0%.
+
+**Nothing loaded the build before publishing it.** No test imports from `dist/`, so the ESM output, the CJS output and the declarations were only ever exercised by a consumer. `npm run verify:dist` loads both entry points and drives a real cache through them, and `prepublishOnly` runs the typecheck, the suite, the build and that gate rather than the build alone.
+
+Also: the git remote still pointed at `destbreso/caffea` and worked only through GitHub's rename redirect.
+
 ## [Unreleased]
 
 ### Changed

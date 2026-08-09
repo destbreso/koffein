@@ -85,9 +85,28 @@ cache.delete("user:42");
 cache.stats(); // { size, capacity, hits, misses, evictions, hitRatio }
 ```
 
-Keys can be any type. String and integer keys are hashed for you by the default
-policy; for other key shapes, pass a `hash` to `WTinyLFU` (see
-[Choosing a policy](#choosing-a-policy)).
+Keys can be any type as *storage*: membership is `Map` identity, so any value
+works as a key. **Admission control is not indifferent to the key's shape,
+though.** The default policy feeds every key to a frequency sketch, and its
+built-in hash only distinguishes **strings and integers**. Every other shape goes
+through `String(key)`, so all plain objects collapse onto the single counter
+`"[object Object]"`: the sketch can no longer tell a hot key from a one-hit scan,
+ties are decided by the admission coin flip, and the scan resistance this cache
+exists for quietly stops working. If your keys are objects, hash their content:
+
+```ts
+import { Cache, WTinyLFU } from "koffein";
+
+type Key = { tenant: string; id: number };
+
+const cache = new Cache<Key, Row>(10_000, {
+  policy: new WTinyLFU<Key, Row>({ hash: (k) => fnv1a(`${k.tenant}:${k.id}`) }),
+});
+```
+
+`fnv1a` is four lines and is spelled out under
+[Hashing string keys](#hashing-string-keys); see
+[Choosing a policy](#choosing-a-policy) for the rest of the policy options.
 
 ### Expiry (TTL)
 
@@ -144,11 +163,20 @@ set.
 | 1% of footprint | 49.8% | 39.6% | +26% |
 | 10% of footprint | 71.7% | 66.3% | +8% |
 
-koffein lands in the top group with LFU, SIEVE and S3-FIFO, a hair under Belady's
-optimal (OPT), and it tracks `transitory` (the other npm W-TinyLFU) to within a
-rounding error: a cross-check that the implementation is sound. On a pure **loop**
-larger than the cache (LRU's textbook worst case) koffein is the only family that
-recovers any hits at all.
+Read that table with its own limits attached. The +84% is against plain LRU, the
+weakest live policy in the panel, at the most extreme size; at 10% of footprint
+the same comparison is +8%. And against the strong policies koffein does not
+lead: at the exact column headlined above it sits at the bottom of the top group,
+behind S3-FIFO at 30.0%, `transitory` at 29.0%, SIEVE at 28.6% and LFU at 28.3%.
+What the table says is that a good modern policy is worth a great deal over LRU
+and that this is a good modern policy, which is the honest and still useful
+claim. Tracking `transitory`, the other npm W-TinyLFU, to within a rounding error
+is the cross-check that the implementation is sound.
+
+On a pure **loop** larger than the cache, LRU's textbook worst case, the
+W-TinyLFU family is the only one that recovers a meaningful share: koffein reads
+0.0% at every size below 25% of footprint and 20.8% at 25%, where the nearest
+non-family result is Random at 2.0%.
 
 ![koffein vs the field on YCSB-skew Zipf](https://raw.githubusercontent.com/destbreso/koffein/main/charts/mrc-zipf-0-99.svg)
 
@@ -176,7 +204,9 @@ scan pollution and it is the case W-TinyLFU exists for. A sweep of keys nobody
 will request again cannot evict your hot set here, because a newcomer has to
 prove it is more popular than the thing it would displace. On a pure loop larger
 than the cache, LRU's textbook worst case, this is the only family in the
-benchmark that recovers any hits at all.
+benchmark that recovers a meaningful share of the hits, and only once the cache
+reaches a quarter of the footprint: below that everything in the panel, koffein
+included, reads zero.
 
 **Memoizing an expensive pure function.** `memo` wraps a sync or async function
 with in-flight de-duplication, so a hundred concurrent callers asking for the
@@ -237,8 +267,10 @@ new Cache(cap, { policy: new LFU() }); // plain LFU (in-cache counts, no aging)
 - **`WTinyLFU`** (default) is the scan-resistant, skew-friendly policy the rest
   of this README is about. It takes its own tuning via
   `new WTinyLFU({ hash, random })`: `hash` maps a key to a 32-bit integer for the
-  frequency sketch (strings and integers are handled for you), and `random` is
-  the admission tie-break source (inject a seeded one for deterministic tests).
+  frequency sketch (strings and integers are handled for you, **object keys need
+  one** or they all share a single counter and admission degenerates), and
+  `random` is the admission tie-break source (inject a seeded one for
+  deterministic tests).
 - **`LRU`** and **`LFU`** are honest, textbook baselines, offered so you can
   measure the gap on *your own* traffic instead of taking the bake-off's word for
   it. Install each behind the same `Cache` and compare `stats().hitRatio`.
