@@ -148,14 +148,19 @@ koffein is measured against plain LRU, the popular npm caches, and the modern
 research policies (SIEVE, S3-FIFO, LFU) with an independent harness,
 [cache-arena](https://github.com/destbreso/cache-arena), on the same seeded
 workloads and through the same uniform driver. Caches are compared at equal
-**memory** (a segmented cache that secretly holds 2x its nominal size is sized
-down to match). Full tables, every workload, and the methodology live in
-[BENCHMARKS.md](./BENCHMARKS.md); the short version:
+**peak occupancy in entries**, measured rather than declared: the harness drives
+each cache through its own surface until the resident set stops growing, then
+sizes it so that measured peak matches the budget, which is how a cache that
+really holds 2x its nominal capacity gets sized down to match. None of that is a
+claim about **bytes**: the harness has no byte instrument, and per-entry overhead
+differs between libraries. Full tables, every workload, and the methodology live
+in [BENCHMARKS.md](./BENCHMARKS.md), which `npm run bench:arena` regenerates from
+scratch and which records the harness version and the Node version it ran on. The
+short version:
 
 **Hit ratio (efficiency).** On skewed (Zipfian) traffic, the common case, koffein
-returns markedly more hits than plain LRU at the same memory, and the gap is
-widest exactly where a cache hurts most: when it is small relative to the working
-set.
+returns markedly more hits than plain LRU at the same size, and the gap is widest
+exactly where a cache hurts most: when it is small relative to the working set.
 
 | Zipf 0.99, cache size | koffein (W-TinyLFU) | plain LRU | vs LRU |
 | --- | ---: | ---: | ---: |
@@ -164,23 +169,24 @@ set.
 | 10% of footprint | 71.7% | 66.3% | +8% |
 
 Read that table with its own limits attached. The +84% is against plain LRU, the
-weakest live policy in the panel, at the most extreme size; at 10% of footprint
-the same comparison is +8%. And against the strong policies koffein does not
-lead: at the exact column headlined above it sits inside the top group but not at
-the front of it, behind S3-FIFO at 30.0%, SIEVE at 28.6% and LFU at 28.3%. What
-the table says is that a good modern policy is worth a great deal over LRU and
-that this is a good modern policy, which is the honest and still useful claim.
+default nearly everywhere but not the strongest policy in the panel, at the most
+extreme size; at 10% of footprint the same comparison is +8%. And against the
+strong policies koffein does not lead: at the exact column headlined above it
+sits inside the top group but not at the front of it, behind S3-FIFO at 30.0%,
+SIEVE at 28.6% and LFU at 28.3%. What the table says is that a good modern policy
+is worth a great deal over LRU and that this is a good modern policy, which is
+the honest and still useful claim.
 
 `transitory`, the other npm W-TinyLFU, reads 25.4% in the same column, and that
 gap is worth explaining rather than banking. The harness measures peak occupancy
 instead of trusting it, and `transitory` holds 1.36 entries per entry of nominal
-capacity where koffein holds 1.00, so it is sized down to compare at equal memory.
-That correction is deliberately conservative: the factor is probed at small
-nominal capacities and applied at every size, and `transitory`'s overshoot is
-largely a small-capacity effect, so at the wider columns it is being charged more
-than it costs. Take the two as level. What matters here is the cross-check, that
-two independent W-TinyLFU implementations land in the same region, which is the
-evidence that this one is built right.
+capacity where koffein holds 1.00, so it is sized down to compare at equal
+occupancy. That correction is deliberately conservative: the factor is probed at
+small nominal capacities and applied at every size, and `transitory`'s overshoot
+is largely a small-capacity effect, so at the wider columns it is being charged
+more than it costs. Take the two as level. What matters here is the cross-check,
+that two independent W-TinyLFU implementations land in the same region, which is
+the evidence that this one is built right.
 
 On a pure **loop** larger than the cache, LRU's textbook worst case, the
 W-TinyLFU family is the only one that recovers a meaningful share: koffein reads
@@ -190,8 +196,8 @@ non-family result is Random at 2.0%.
 ![koffein vs the field on YCSB-skew Zipf](https://raw.githubusercontent.com/destbreso/koffein/main/charts/mrc-zipf-0-99.svg)
 
 Efficiency numbers above are exact (a deterministic simulation); throughput is
-per-machine and per-implementation, reported with 95% confidence intervals in
-[BENCHMARKS.md](./BENCHMARKS.md).
+per-machine and per-implementation, reported in [BENCHMARKS.md](./BENCHMARKS.md)
+as the median of 12 timed trials with its interquartile range.
 
 ## Where this earns its place
 
@@ -231,6 +237,33 @@ argument, and `LRU`, `LFU` and your own implementation all plug into the same
 interface, so "is this better for my traffic" is a question you can answer on
 your own trace instead of taking my word for it.
 
+## Limits
+
+What the cache does not do, stated here rather than discovered later.
+
+- **Capacity is entries, not bytes.** `new Cache(10_000)` holds ten thousand
+  entries whatever they weigh. There is no size function and no byte budget, so a
+  cache of wildly uneven values is not memory-bounded in any useful sense.
+- **Expiry frees a slot when the entry is touched, not when it expires.** Lazy TTL
+  is why there are no timers to manage, and it is also why an expired entry keeps
+  occupying its slot until something reads, overwrites or evicts it. A cache that
+  has gone quiet stays full of dead entries.
+- **No eviction callback.** There is no `onEvict` or `dispose` hook, so a value
+  that owns a resource (a socket, a file handle) will not be closed for you.
+- **No iteration.** No `keys()`, `values()` or `entries()`. The cache is a lookup
+  structure, not a collection you walk; `size` and `stats()` are the whole
+  introspection surface, and `stats()` counts from construction or the last
+  `clear()`.
+- **Frequency is an estimate that saturates at 15.** The sketch never
+  underestimates but can overestimate on a hash collision, and above 15 it cannot
+  tell a warm key from a scorching one. That is enough for admission, which only
+  ever asks "hotter than the victim it would replace", and it is not a counter to
+  read as truth.
+- **Object keys need a hash.** Worth repeating from the quick start, because it is
+  the one way to install this cache and silently lose the property it exists for.
+- **One process, one thread.** Nothing is shared across workers, nothing survives
+  a restart, and there is no invalidation protocol.
+
 ## When not to use this
 
 Both ends, because a package that only names one is advertising.
@@ -244,12 +277,28 @@ never going to throw out. Use a `Map`, or `lru-cache` for the ergonomics.
 is predictive. If every key really is equally likely, there is nothing to
 predict, the sketch is overhead, and LRU's simplicity wins.
 
+**Your working set turns over wholesale, and the cache is not small.** Frequency
+is memory, and memory of a popularity distribution that no longer exists is a
+cost. On the harness's `shift` workload, where the working set moves every phase,
+koffein leads plain LRU while the cache is small (48.1% against 38.9% at 1% of
+footprint) and then falls behind it as the cache grows: 69.3% against 76.5% at
+10% of footprint, and 76.0% against 90.6% at 25%. If your traffic is phases
+rather than a stable popularity distribution, and your cache is generous relative
+to the footprint, plain LRU
+([`lru-cache`](https://www.npmjs.com/package/lru-cache),
+[`tiny-lru`](https://www.npmjs.com/package/tiny-lru)) is the better bet.
+
 **Throughput is your bottleneck, not hit ratio.** Admission is not free: koffein
 does more work per operation than a bare LRU map, a sketch lookup and sometimes
-an eviction decision, so it is not the throughput leader. If your backing store
-is fast and your cache is doing millions of operations a second, the cheaper
-policy may serve you better even at a lower hit ratio. That is a real trade and
-the numbers for both sides are in [BENCHMARKS.md](./BENCHMARKS.md).
+an eviction decision, so it is not the throughput leader. In the same report it
+averages 10.5 million operations per second across the eight workloads, against
+19.8 for [`tiny-lru`](https://www.npmjs.com/package/tiny-lru), 18.5 for
+[`quick-lru`](https://www.npmjs.com/package/quick-lru) and 13.6 for
+[`lru-cache`](https://www.npmjs.com/package/lru-cache) on the same machine and in
+the same rounds. If your backing store is fast and your cache is doing millions
+of operations a second, one of those may serve you better even at a lower hit
+ratio. That is a real trade and the numbers for both sides are in
+[BENCHMARKS.md](./BENCHMARKS.md).
 
 **You need a distributed or persistent cache.** This is an in-process, in-memory
 cache. It does not replicate, it does not survive a restart, and it has no
@@ -287,7 +336,12 @@ new Cache(cap, { policy: new LFU() }); // plain LFU (in-cache counts, no aging)
 Write your own by implementing `EvictionPolicy<K, V>`: `init(capacity)`,
 `onAdd(node)` (returns a victim to evict or `null`), `onAccess(node)`,
 `onMiss(key)`, `onRemove(node)`, and `clear()`. The `Node` and `EvictionPolicy`
-types are exported for this. TTL is orthogonal and works behind any policy.
+types are exported for this. So is `IntrusiveList`, the doubly-linked list the
+built-in policies are built on (`pushHead`, `moveToHead`, `popTail`, `remove`,
+`clear`, plus `head`, `tail` and `size`): the node *is* the list cell, so moving
+an entry between lists is O(1) and allocates nothing, and `Node` carries three
+scratch fields (`segment`, `hash`, `freq`) your policy may use however it likes.
+TTL is orthogonal and works behind any policy.
 
 ### Selecting a policy by name
 
@@ -338,6 +392,10 @@ const distance = memo(computeDistance, { keyFn: (from, to) => `${from}->${to}` }
 `capacity` (default 1000), `ttl`, `clock`, and `policy` pass through to the
 underlying cache. The memoized function also carries `.delete(...args)` to
 invalidate one call, `.clear()`, `.stats()`, and `.cache` for direct access.
+
+One behavior to know: `undefined` is the miss sentinel, so a call that returns
+`undefined` is never served from cache and runs again every time. Return `null`
+for "computed, and the answer is nothing".
 
 ## Cache API
 
