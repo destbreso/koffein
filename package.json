@@ -36,8 +36,9 @@
     "bench": "npm run build && node bench/sketch.mjs",
     "bench:cache": "npm run build && node bench/bakeoff.mjs",
     "bench:arena": "npm run build && node bench/arena.mjs",
-    "prepublishOnly": "npm run typecheck && npm test && npm run build && npm run verify:dist",
-    "verify:dist": "node scripts/verify-dist.mjs"
+    "prepublishOnly": "npm run typecheck && npm test && npm run build && npm run verify:lockfile && npm run verify:dist",
+    "verify:dist": "node scripts/verify-dist.mjs",
+    "verify:lockfile": "node scripts/verify-lockfile.mjs"
   },
   "keywords": [
     "cache",
